@@ -482,10 +482,22 @@ void init_QMMMrec(t_commrec  *cr,
     {
         gmx_fatal(FARGS, "QMMM is currently only supported with cutoff-scheme=group");
     }
+
+#if GMX_QMMM_LIO
+    if (!EI_DYNAMICS(ir->eI) && !EI_ENERGY_MINIMIZATION(ir->eI))
+    {
+        gmx_fatal(FARGS, "QMMM-LIO is only supported with dynamics or energy minimizations.");
+    }
+    else if ( (ir->eI) == eiCG || (ir->eI == eiLBFGS) )
+    {
+        gmx_fatal(FARGS, "QMMM-LIO minimization only supported with steepest descent minimizations.");
+    }
+#else
     if (!EI_DYNAMICS(ir->eI))
     {
-        gmx_fatal(FARGS, "QMMM is only supported with dynamics");
+        gmx_fatal(FARGS, "QMMM is only supported with dynamics. For energy minimizations use LIO.");
     }
+#endif
 
     c6au  = (HARTREE2KJ*AVOGADRO*gmx::power6(BOHR2NM));
     c12au = (HARTREE2KJ*AVOGADRO*gmx::power12(BOHR2NM));

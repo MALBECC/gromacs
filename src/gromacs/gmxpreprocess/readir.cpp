@@ -1381,14 +1381,28 @@ void check_ir(const char *mdparin, t_inputrec *ir, t_gromppopts *opts,
         {
             warning_error(wi, "QMMM is currently only supported with cutoff-scheme=group");
         }
+#if GMX_QMMM_LIO
+        if (!EI_DYNAMICS(ir->eI) && !EI_ENERGY_MINIMIZATION(ir->eI))
+        {
+            char buf[STRLEN];
+            sprintf(buf, "QMMM-LIO is only supported with dynamics or energy minimizations.");
+            warning_error(wi, buf);
+        }
+        else if ( (ir->eI) == eiCG || (ir->eI == eiLBFGS) )
+        {
+            char buf[STRLEN];
+            sprintf(buf, "QMMM-LIO minimization only supported with steepest descent minimizations.");
+            warning_error(wi, buf);
+        }
+#else
         if (!EI_DYNAMICS(ir->eI))
         {
             char buf[STRLEN];
-            sprintf(buf, "QMMM is only supported with dynamics, not with integrator %s", ei_names[ir->eI]);
+            sprintf(buf, "QMMM is only supported with dynamics, not with integrator %s. For minimizations use LIO.", ei_names[ir->eI]);
             warning_error(wi, buf);
         }
+#endif
     }
-
     if (ir->bAdress)
     {
         gmx_fatal(FARGS, "AdResS simulations are no longer supported");
