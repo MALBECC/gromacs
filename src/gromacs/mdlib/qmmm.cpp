@@ -117,6 +117,14 @@ init_orca(t_QMrec *qm);
 real
 call_orca(t_forcerec *fr, t_QMrec *qm,
           t_MMrec *mm, rvec f[], rvec fshift[]);
+#elif GMX_QMMM_LIO
+/* LIO interface */
+
+void 
+init_lio(t_QMrec *qm, t_MMrec *mm);
+
+real
+call_lio(t_forcerec *fr, t_QMrec *qm, t_MMrec *mm, rvec f[], rvec fshift[]);
 
 #endif
 
@@ -184,8 +192,10 @@ real call_QMroutine(t_commrec gmx_unused *cr, t_forcerec gmx_unused *fr, t_QMrec
             QMener = call_gaussian(fr, qm, mm, f, fshift);
 #elif GMX_QMMM_ORCA
             QMener = call_orca(fr, qm, mm, f, fshift);
+#elif GMX_QMMM_LIO
+            QMener = call_lio(fr, qm, mm, f, fshift);
 #else
-            gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian or ORCA.");
+            gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian, ORCA or LIO.");
 #endif
         }
     }
@@ -214,8 +224,10 @@ void init_QMroutine(t_commrec gmx_unused *cr, t_QMrec gmx_unused *qm, t_MMrec gm
         init_gaussian(qm);
 #elif GMX_QMMM_ORCA
         init_orca(qm);
+#elif GMX_QMMM_LIO
+        init_lio(qm, mm);
 #else
-        gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian or ORCA.");
+        gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian, ORCA or LIO.");
 #endif
     }
 } /* init_QMroutine */
@@ -752,15 +764,17 @@ void init_QMMMrec(t_commrec  *cr,
         }
         else
         {
-            /* ab initio calculation requested (gamess/gaussian/ORCA) */
+            /* ab initio calculation requested (gamess/gaussian/ORCA/LIO) */
 #if GMX_QMMM_GAMESS
             init_gamess(cr, qr->qm[0], qr->mm);
 #elif GMX_QMMM_GAUSSIAN
             init_gaussian(qr->qm[0]);
 #elif GMX_QMMM_ORCA
             init_orca(qr->qm[0]);
+#elif GMX_QMMM_LIO
+            init_lio(qr->qm[0], qr->mm);
 #else
-            gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian or ORCA.");
+            gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian, ORCA or LIO.");
 #endif
         }
     }
