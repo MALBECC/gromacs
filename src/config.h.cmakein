@@ -187,6 +187,9 @@
 #cmakedefine01 GMX_QMMM_MOPAC
 
 /* Use ORCA for QM-MM calculations */
+#cmakedefine01 GMX_QMMM_LIO
+
+/* Use LIO for QM-MM calculations */
 #cmakedefine01 GMX_QMMM_ORCA
 
 /* Use cycle counters */
