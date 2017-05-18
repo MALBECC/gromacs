@@ -2390,6 +2390,84 @@ double do_lbfgs(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
     return 0;
 }   /* That's all folks */
 
+void do_linear_search(FILE *fplog, t_commrec *cr, gmx_mtop_t *top_global, 
+                      gmx_localtop_t *top, t_inputrec *inputrec, t_nrnb *nrnb,
+                      gmx_wallcycle_t wcycle, gmx_global_stat_t gstat,
+                      gmx_vsite_t *vsite, gmx_constr_t constr, t_fcdata *fcd,
+                      t_graph *graph, t_mdatoms *mdatoms, t_forcerec *fr,
+                      rvec mu_tot, gmx_enerdata_t *enerd, tensor vir, 
+                      tensor pres, int count, real *step, em_state_t *ems1,
+                      const PaddedRVecVector *force)
+{
+    double     *energies,
+                d_ener_a,
+                d_ener_b,
+                stp_factor;
+    int         max_ls_points = 5,
+                min_energ,
+                ls_point = 0;
+    em_state_t *ems2 = &ems1;
+    // Makes the energy for a number of linear search steps.
+    
+    snew(energies, max_ls_points);
+    s1 = &ems1->s;
+    s2 = &ems2->s;
+
+    rvec *x1 = as_rvec_array(s1->x.data());
+    rvec *x2 = as_rvec_array(s2->x.data());
+    rvec *f  = as_rvec_array(force->data());
+
+    while (ls_point < max_ls_points)
+    {
+        for (int i = 0; i < n_atoms; i++)
+        {
+                 for (int m = 0; m < DIM; m++)
+                {
+                    if (ir->opts.nFreeze[gf][m])
+                    {
+                        x2[i][m] = x1[i][m];
+                    }
+                    else
+                    {
+                        x2[i][m] = x1[i][m] + step*ls_point*f[i][m];
+                    }
+                }
+        }
+        evaluate_energy(fplog, cr, top_global, s2, top, inputrec, nrnb, 
+                        wcycle, gstat, vsite, constr, fcd, graph, mdatoms, 
+                        fr, mu_tot, enerd, vir, pres, count, count == 0);
+        energies[i] = s2->epot;
+        ls_point++;
+    }
+
+    min_energ = 0;
+    for (int i = 1; i < max_ls_points; i++)
+    {
+         if (energies[i] < energies[min_energ])
+         {
+             min_energ = i;
+         }
+    }
+
+    if (min_energ == 0)
+    {
+        *step = 0;
+        free(energies);
+        return;
+    } else if (min_energ == max_ls_points-1) {
+        *step = step * min_energ;
+        free(energies);
+        return;
+    } else {
+        d_ener_a = fabs(energies[min_energ] - energies[min_energ+1]);
+        d_ener_b = fabs(energies[min_energ] - energies[min_energ-1]);
+        stp_factor = (d_ener_b - d_ener_a)/((d_ener_b + d_ener_a)*2)
+        *step *= (min_energ - stp_factor);
+        free(energies);
+        return;
+    }
+}
+
 /*! \brief Do steepest descents minimization
     \copydoc integrator_t(FILE *fplog, t_commrec *cr, const gmx::MDLogger &mdlog,
                           int nfile, const t_filenm fnm[],
@@ -2448,6 +2526,7 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
     int               nsteps;
     int               count          = 0;
     int               steps_accepted = 0;
+    bool              linear_search=false;
 
     /* Create 2 states on the stack and extract pointers that we will swap */
     em_state_t  s0 {}, s1 {};
@@ -2604,6 +2683,12 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
 
         /* Determine new step  */
         stepsize = ustep/s_min->fmax;
+
+        if (linear_search)
+        {
+            do_linear_search();
+        }
+
 
         /* Check if stepsize is too small, with 1 nm as a characteristic length */
 #if GMX_DOUBLE
