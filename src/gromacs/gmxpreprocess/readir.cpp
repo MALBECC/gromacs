@@ -1388,10 +1388,10 @@ void check_ir(const char *mdparin, t_inputrec *ir, t_gromppopts *opts,
             sprintf(buf, "QMMM-LIO is only supported with dynamics or energy minimizations.");
             warning_error(wi, buf);
         }
-        else if ( (ir->eI) == eiCG || (ir->eI == eiLBFGS) )
+        else if ( (ir->eI == eiLBFGS) )
         {
             char buf[STRLEN];
-            sprintf(buf, "QMMM-LIO minimization only supported with steepest descent minimizations.");
+            sprintf(buf, "QMMM-LIO minimization only supported with steepest descent or CG minimizations.");
             warning_error(wi, buf);
         }
 #else

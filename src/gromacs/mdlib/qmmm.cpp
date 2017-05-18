@@ -488,9 +488,9 @@ void init_QMMMrec(t_commrec  *cr,
     {
         gmx_fatal(FARGS, "QMMM-LIO is only supported with dynamics or energy minimizations.");
     }
-    else if ( (ir->eI) == eiCG || (ir->eI == eiLBFGS) )
+    else if ( (ir->eI == eiLBFGS) )
     {
-        gmx_fatal(FARGS, "QMMM-LIO minimization only supported with steepest descent minimizations.");
+        gmx_fatal(FARGS, "QMMM-LIO minimization only supported with CG or steepest descent minimizations.");
     }
 #else
     if (!EI_DYNAMICS(ir->eI))
