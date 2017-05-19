@@ -107,7 +107,7 @@ typedef struct {
     //! Force array
     PaddedRVecVector f;
     //! Potential energy
-    real             epot;
+    double           epot;
     //! Norm of the force
     real             fnorm;
     //! Maximum force
@@ -798,7 +798,7 @@ static void evaluate_energy(FILE *fplog, t_commrec *cr,
 
     ems->epot = enerd->term[F_EPOT];
 
-    if (constr)
+    if (constr and false)
     {
         /* Project out the constraint components of the force */
         wallcycle_start(wcycle, ewcCONSTR);
@@ -2391,27 +2391,33 @@ double do_lbfgs(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
 }   /* That's all folks */
 
 void do_linear_search(FILE *fplog, t_commrec *cr, gmx_mtop_t *top_global, 
-                      gmx_localtop_t *top, t_inputrec *inputrec, t_nrnb *nrnb,
+                      gmx_localtop_t *top, t_inputrec *ir, t_nrnb *nrnb,
                       gmx_wallcycle_t wcycle, gmx_global_stat_t gstat,
                       gmx_vsite_t *vsite, gmx_constr_t constr, t_fcdata *fcd,
                       t_graph *graph, t_mdatoms *mdatoms, t_forcerec *fr,
                       rvec mu_tot, gmx_enerdata_t *enerd, tensor vir, 
-                      tensor pres, int count, real *step, em_state_t *ems1,
-                      const PaddedRVecVector *force)
+                      tensor pres, int count, real *lambda, real *ls_step, 
+                      em_state_t *ems1, em_state_t *ems2, PaddedRVecVector *force)
 {
     double     *energies,
                 d_ener_a,
                 d_ener_b,
                 stp_factor;
-    int         max_ls_points = 5,
+    int         max_ls_points = 2,
                 min_energ,
-                ls_point = 0;
-    em_state_t *ems2 = &ems1;
+                ls_point = 0,
+                gf=0,
+                n_atoms;
+    t_state     *s1, *s2;
+    t_forcerec *fr_copy;
+
     // Makes the energy for a number of linear search steps.
-    
-    snew(energies, max_ls_points);
     s1 = &ems1->s;
     s2 = &ems2->s;
+    fr_copy = fr;
+    snew(energies, max_ls_points);
+    
+    n_atoms = s1->natoms;
 
     rvec *x1 = as_rvec_array(s1->x.data());
     rvec *x2 = as_rvec_array(s2->x.data());
@@ -2421,7 +2427,11 @@ void do_linear_search(FILE *fplog, t_commrec *cr, gmx_mtop_t *top_global,
     {
         for (int i = 0; i < n_atoms; i++)
         {
-                 for (int m = 0; m < DIM; m++)
+                if (mdatoms->cFREEZE)
+                {
+                    gf = mdatoms->cFREEZE[i];
+                }
+                for (int m = 0; m < DIM; m++)
                 {
                     if (ir->opts.nFreeze[gf][m])
                     {
@@ -2429,14 +2439,15 @@ void do_linear_search(FILE *fplog, t_commrec *cr, gmx_mtop_t *top_global,
                     }
                     else
                     {
-                        x2[i][m] = x1[i][m] + step*ls_point*f[i][m];
+                        x2[i][m] = x1[i][m] + (*ls_step)*ls_point*f[i][m]/(ems1->fmax);
                     }
                 }
         }
-        evaluate_energy(fplog, cr, top_global, s2, top, inputrec, nrnb, 
+        evaluate_energy(fplog, cr, top_global, ems2, top, ir, nrnb, 
                         wcycle, gstat, vsite, constr, fcd, graph, mdatoms, 
-                        fr, mu_tot, enerd, vir, pres, count, count == 0);
-        energies[i] = s2->epot;
+                        fr_copy, mu_tot, enerd, vir, pres, count, count == 0);
+        energies[ls_point] = ems2->epot;
+        fprintf(stderr, "Linear search energy %d: %10.7f \n", ls_point, ems2->epot);
         ls_point++;
     }
 
@@ -2448,21 +2459,24 @@ void do_linear_search(FILE *fplog, t_commrec *cr, gmx_mtop_t *top_global,
              min_energ = i;
          }
     }
-
+    
+   
     if (min_energ == 0)
     {
-        *step = 0;
+        *lambda   = 0;
+        *ls_step *= 0.2;
         free(energies);
         return;
     } else if (min_energ == max_ls_points-1) {
-        *step = step * min_energ;
+        *lambda  = (*ls_step)*min_energ;
+        *ls_step *= 1.5;
         free(energies);
         return;
     } else {
         d_ener_a = fabs(energies[min_energ] - energies[min_energ+1]);
         d_ener_b = fabs(energies[min_energ] - energies[min_energ-1]);
-        stp_factor = (d_ener_b - d_ener_a)/((d_ener_b + d_ener_a)*2)
-        *step *= (min_energ - stp_factor);
+        stp_factor = (d_ener_b - d_ener_a)/((d_ener_b + d_ener_a)*2);
+        *lambda = (*ls_step)*(min_energ - stp_factor);
         free(energies);
         return;
     }
@@ -2526,12 +2540,17 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
     int               nsteps;
     int               count          = 0;
     int               steps_accepted = 0;
-    bool              linear_search=false;
+    bool              linear_search = true;
+    real              linear_search_step = 0;
 
     /* Create 2 states on the stack and extract pointers that we will swap */
     em_state_t  s0 {}, s1 {};
     em_state_t *s_min = &s0;
     em_state_t *s_try = &s1;
+  
+    // Create an additional state for linear search. //
+    em_state_t s2{};
+    em_state_t *s_ls = &s2;
 
     /* Init em and store the local state in s_try */
     init_em(fplog, SD, cr, outputProvider, inputrec,
@@ -2547,6 +2566,7 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
      * step that we are going to make in any direction.
      */
     ustep    = inputrec->em_stepsize;
+    linear_search_step = ustep;
     stepsize = 0;
 
     /* Max number of steps  */
@@ -2619,8 +2639,7 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
                         ( (count == 0) || (s_try->epot < s_min->epot) ) ? '\n' : '\r');
                 fflush(stderr);
             }
-
-            if ( (count == 0) || (s_try->epot < s_min->epot) )
+            if ( (count == 0) || (s_try->epot < s_min->epot) || linear_search )
             {
                 /* Store the new (lower) energies  */
                 upd_mdebin(mdebin, FALSE, FALSE, (double)count,
@@ -2644,7 +2663,7 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
          * or if we did random steps!
          */
 
-        if ( (count == 0) || (s_try->epot < s_min->epot) )
+        if ( (count == 0) || (s_try->epot < s_min->epot) || linear_search)
         {
             steps_accepted++;
 
@@ -2655,7 +2674,7 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
             /* The 'Min' array always holds the coords and forces of the minimal
                sampled energy  */
             swap_em_state(&s_min, &s_try);
-            if (count > 0)
+            if (count > 0 && !linear_search)
             {
                 ustep *= 1.2;
             }
@@ -2686,15 +2705,24 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
 
         if (linear_search)
         {
-            do_linear_search();
+            s_ls = s_min;
+            fprintf(stderr, "Starting linear search. \n");
+            do_linear_search(fplog, cr, top_global, top, inputrec, nrnb,
+                             wcycle, gstat, vsite, constr, fcd, graph, 
+                             mdatoms, fr, mu_tot, enerd, vir, pres, count,
+                             &stepsize, &linear_search_step, s_min, s_ls,
+                             &s_min->f);
+            fprintf(stderr, "Linear search done. ls_step =  %10.7f | lambda = %10.7f \n", 
+                             linear_search_step, stepsize);
         }
-
 
         /* Check if stepsize is too small, with 1 nm as a characteristic length */
 #if GMX_DOUBLE
-        if (count == nsteps || ustep < 1e-12)
+        if (count == nsteps || (ustep < 1e-12 && !linear_search)
+                            || (linear_search_step  < 1e-12 && linear_search))
 #else
-        if (count == nsteps || ustep < 1e-6)
+        if (count == nsteps || (ustep < 1e-6  && !linear_search) 
+                            || (linear_search_step  < 1e-6 && linear_search ))
 #endif
         {
             if (MASTER(cr))
@@ -2703,6 +2731,7 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
                 warn_step(fplog, inputrec->em_tol, count == nsteps, constr != nullptr);
             }
             bAbort = TRUE;
+            
         }
 
         /* Send IMD energies and positions, if bIMD is TRUE. */
