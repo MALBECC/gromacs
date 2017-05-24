@@ -2397,89 +2397,52 @@ void do_linear_search(FILE *fplog, t_commrec *cr, gmx_mtop_t *top_global,
                       t_graph *graph, t_mdatoms *mdatoms, t_forcerec *fr,
                       rvec mu_tot, gmx_enerdata_t *enerd, tensor vir, 
                       tensor pres, int count, real *lambda, real *ls_step, 
-                      em_state_t *ems1, em_state_t *ems2, PaddedRVecVector *force)
+                      em_state_t *ems1, em_state_t *ems2)
 {
-    double     *energies,
+    real       *energies,
                 d_ener_a,
                 d_ener_b,
-                stp_factor;
-    int         max_ls_points = 2,
-                min_energ,
-                ls_point = 0,
-                gf=0,
-                n_atoms;
-    t_state     *s1, *s2;
-    t_forcerec *fr_copy;
+                max_force,
+                stp_factor,
+                step_size = 0;
+    int         max_ls_points = 5,
+                min_energ = 0,
+                ls_point = 0;
 
     // Makes the energy for a number of linear search steps.
-    s1 = &ems1->s;
-    s2 = &ems2->s;
-    fr_copy = fr;
+    max_force = ems1->fmax;
     snew(energies, max_ls_points);
-    
-    n_atoms = s1->natoms;
-
-    rvec *x1 = as_rvec_array(s1->x.data());
-    rvec *x2 = as_rvec_array(s2->x.data());
-    rvec *f  = as_rvec_array(force->data());
 
     while (ls_point < max_ls_points)
     {
-        for (int i = 0; i < n_atoms; i++)
-        {
-                if (mdatoms->cFREEZE)
-                {
-                    gf = mdatoms->cFREEZE[i];
-                }
-                for (int m = 0; m < DIM; m++)
-                {
-                    if (ir->opts.nFreeze[gf][m])
-                    {
-                        x2[i][m] = x1[i][m];
-                    }
-                    else
-                    {
-                        x2[i][m] = x1[i][m] + (*ls_step)*ls_point*f[i][m]/(ems1->fmax);
-                    }
-                }
-        }
-        evaluate_energy(fplog, cr, top_global, ems2, top, ir, nrnb, 
-                        wcycle, gstat, vsite, constr, fcd, graph, mdatoms, 
-                        fr_copy, mu_tot, enerd, vir, pres, count, count == 0);
+        step_size = (*ls_step)*ls_point/(max_force);
+        do_em_step(cr, ir, mdatoms, fr->bMolPBC, ems1, step_size, &ems1->f,
+                   ems2, constr, top, nrnb, wcycle, count);
+        evaluate_energy(fplog, cr, top_global, ems2, top, ir, nrnb, wcycle,
+                        gstat, vsite, constr, fcd, graph, mdatoms, fr,
+                        mu_tot, enerd, vir, pres, count, count == 0);
         energies[ls_point] = ems2->epot;
         fprintf(stderr, "Linear search energy %d: %10.7f \n", ls_point, ems2->epot);
+        if (energies[ls_point] < energies[min_energ]) { min_energ = ls_point; };
         ls_point++;
     }
-
-    min_energ = 0;
-    for (int i = 1; i < max_ls_points; i++)
-    {
-         if (energies[i] < energies[min_energ])
-         {
-             min_energ = i;
-         }
-    }
-    
    
     if (min_energ == 0)
     {
         *lambda   = 0;
         *ls_step *= 0.2;
-        free(energies);
-        return;
     } else if (min_energ == max_ls_points-1) {
-        *lambda  = (*ls_step)*min_energ;
+        *lambda  = (*ls_step)*min_energ/(max_force);
         *ls_step *= 1.5;
-        free(energies);
-        return;
     } else {
         d_ener_a = fabs(energies[min_energ] - energies[min_energ+1]);
         d_ener_b = fabs(energies[min_energ] - energies[min_energ-1]);
         stp_factor = (d_ener_b - d_ener_a)/((d_ener_b + d_ener_a)*2);
-        *lambda = (*ls_step)*(min_energ - stp_factor);
-        free(energies);
-        return;
+        *lambda = (*ls_step)*(min_energ - stp_factor)/(max_force);
     }
+
+    free(energies);
+    return;
 }
 
 /*! \brief Do steepest descents minimization
@@ -2705,14 +2668,12 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
 
         if (linear_search)
         {
-            s_ls = s_min;
             fprintf(stderr, "Starting linear search. \n");
             do_linear_search(fplog, cr, top_global, top, inputrec, nrnb,
                              wcycle, gstat, vsite, constr, fcd, graph, 
                              mdatoms, fr, mu_tot, enerd, vir, pres, count,
-                             &stepsize, &linear_search_step, s_min, s_ls,
-                             &s_min->f);
-            fprintf(stderr, "Linear search done. ls_step =  %10.7f | lambda = %10.7f \n", 
+                             &stepsize, &linear_search_step, s_min, s_ls);
+            fprintf(stderr, "Linear search done. LS step = %10.7f and final step = %12.5e .\n", 
                              linear_search_step, stepsize);
         }
 
