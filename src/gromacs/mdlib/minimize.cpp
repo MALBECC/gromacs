@@ -2513,7 +2513,7 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
     int               nsteps;
     int               count          = 0;
     int               steps_accepted = 0;
-    bool              linear_search = true;
+    bool              linear_search = false;
     real              linear_search_step = 0;
 
     /* Create 2 states on the stack and extract pointers that we will swap */
@@ -2524,6 +2524,7 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
     // Create an additional state for linear search. //
     em_state_t s2{};
     em_state_t *s_ls = &s2;
+    linear_search = inputrec->emls;
 
     /* Init em and store the local state in s_try */
     init_em(fplog, SD, cr, outputProvider, inputrec,
@@ -2683,8 +2684,8 @@ double do_steep(FILE *fplog, t_commrec *cr, const gmx::MDLogger gmx_unused &mdlo
                              wcycle, gstat, vsite, constr, fcd, graph,
                              mdatoms, fr, mu_tot, enerd, vir, pres, count,
                              &stepsize, &linear_search_step, s_min, s_ls);
-            fprintf(stderr, "Linear search done. LS step = %10.7f and final step = %12.5e .\n",
-                             linear_search_step, stepsize);
+            fprintf(stderr, "Linear search done. Minimization step size %12.5e nm.\n", 
+                    stepsize);
         }
 
         /* Check if stepsize is too small, with 1 nm as a characteristic length */

@@ -791,6 +791,7 @@ void pr_inputrec(FILE *fp, int indent, const char *title, const t_inputrec *ir,
         PR("fcstep", ir->fc_stepsize);
         PI("nstcgsteep", ir->nstcgsteep);
         PI("nbfgscorr", ir->nbfgscorr);
+        PS("linearsearch", EBOOL(ir->emls));
 
         /* Test particle insertion */
         PR("rtpi", ir->rtpi);
@@ -1155,6 +1156,7 @@ void cmp_inputrec(FILE *fp, const t_inputrec *ir1, const t_inputrec *ir2, real f
      * #define CIR(s) cmp_real(fp,"inputrec->"#s,0,ir1->##s,ir2->##s,ftol)
      */
     cmp_int(fp, "inputrec->eI", -1, ir1->eI, ir2->eI);
+    cmp_int(fp, "inputrec->emls", -1, ir1->emls, ir2->emls);
     cmp_int64(fp, "inputrec->nsteps", ir1->nsteps, ir2->nsteps);
     cmp_int64(fp, "inputrec->init_step", ir1->init_step, ir2->init_step);
     cmp_int(fp, "inputrec->simulation_part", -1, ir1->simulation_part, ir2->simulation_part);

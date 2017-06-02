@@ -1931,6 +1931,8 @@ void get_ir(const char *mdparin, const char *mdparout,
     CTYPE ("Frequency of steepest descents steps when doing CG");
     ITYPE ("nstcgsteep",  ir->nstcgsteep, 1000);
     ITYPE ("nbfgscorr",   ir->nbfgscorr,  10);
+    CTYPE ("Perform linear search for steep and CG");
+    EETYPE("linearsearch", ir->emls, yesno_names);
 
     CCTYPE ("TEST PARTICLE INSERTION OPTIONS");
     RTYPE ("rtpi",    ir->rtpi,   0.05);

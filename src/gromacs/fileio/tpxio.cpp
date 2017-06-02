@@ -981,6 +981,7 @@ static void do_inputrec(t_fileio *fio, t_inputrec *ir, gmx_bool bRead,
 
     /* Basic inputrec stuff */
     gmx_fio_do_int(fio, ir->eI);
+    gmx_fio_do_gmx_bool(fio, ir->emls);
     if (file_version >= 62)
     {
         gmx_fio_do_int64(fio, ir->nsteps);
