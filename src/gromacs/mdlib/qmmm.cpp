@@ -59,6 +59,7 @@
 #include "gromacs/mdlib/qm_gaussian.h"
 #include "gromacs/mdlib/qm_mopac.h"
 #include "gromacs/mdlib/qm_orca.h"
+#include "gromacs/mdlib/qm_lio.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
@@ -147,9 +148,13 @@ static real call_QMroutine(const t_commrec gmx_unused *cr, const t_forcerec gmx_
             {
                 return call_orca(fr, qm, mm, f, fshift);
             }
+            else if (GMX_QMMM_LIO)
+            {
+                return call_lio(fr, qm, mm, f, fshift);
+            }
             else
             {
-                gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian or ORCA.");
+                gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian, ORCA or LIO.");
             }
         }
     }
@@ -186,9 +191,13 @@ static void init_QMroutine(const t_commrec gmx_unused *cr, t_QMrec gmx_unused *q
         {
             init_orca(qm);
         }
+        else if (GMX_QMMM_LIO)
+        {
+            init_lio(qm, mm);
+        }
         else
         {
-            gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian or ORCA.");
+            gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian, ORCA or LIO.");
         }
     }
 } /* init_QMroutine */
@@ -575,9 +584,13 @@ void init_QMMMrec(const t_commrec  *cr,
             {
                 init_orca(qr->qm[0]);
             }
+            else if (GMX_QMMM_LIO)
+            {
+                init_lio(qr->qm[0], qr->mm);
+            }
             else
             {
-                gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian or ORCA.");
+                gmx_fatal(FARGS, "Ab-initio calculation only supported with Gamess, Gaussian, ORCA or LIO.");
             }
         }
     }

@@ -42,7 +42,7 @@
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/tgroup.h"
 
-#define GMX_QMMM (GMX_QMMM_MOPAC || GMX_QMMM_GAMESS || GMX_QMMM_GAUSSIAN || GMX_QMMM_ORCA)
+#define GMX_QMMM (GMX_QMMM_MOPAC || GMX_QMMM_GAMESS || GMX_QMMM_GAUSSIAN || GMX_QMMM_ORCA || GMX_QMMM_LIO)
 
 struct gmx_localtop_t;
 struct gmx_mtop_t;
