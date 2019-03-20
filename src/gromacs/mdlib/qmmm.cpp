@@ -382,15 +382,26 @@ void init_QMMMrec(const t_commrec  *cr,
     {
         gmx_incons("Compiled without QMMM");
     }
-
     if (ir->cutoff_scheme != ecutsGROUP)
     {
         gmx_fatal(FARGS, "QMMM is currently only supported with cutoff-scheme=group");
     }
+
+#if GMX_QMMM_LIO
+    if (!EI_DYNAMICS(ir->eI) && !EI_ENERGY_MINIMIZATION(ir->eI))
+        {
+            gmx_fatal(FARGS, "QMMM-LIO is only supported with dynamics or energy minimizations.");
+        }
+        else if ( (ir->eI == eiLBFGS) )
+        {
+            gmx_fatal(FARGS, "QMMM-LIO minimization only supported with steepest descent or CG minimizations.");
+        }
+#else
     if (!EI_DYNAMICS(ir->eI))
     {
         gmx_fatal(FARGS, "QMMM is only supported with dynamics");
     }
+#endif
 
     /* issue a fatal if the user wants to run with more than one node */
     if (PAR(cr))
